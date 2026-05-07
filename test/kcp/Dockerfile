@@ -14,5 +14,6 @@ RUN git clone --depth 1 https://github.com/kcp-dev/kcp . && \
     go build -v ./test/...
 
 ENV NO_GORUN=1
+ENV GOMAXPROCS=1
 
-CMD [ "bash", "-c", "go test -parallel 1 ./test/e2e/... -args --kcp-kubeconfig $KUBECONFIG" ]
+CMD [ "bash", "-c", "go test -v -parallel 1 ./test/e2e/... -args --kcp-kubeconfig $KUBECONFIG" ]

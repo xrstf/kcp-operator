@@ -1,5 +1,3 @@
-//go:build kcpe2e
-
 /*
 Copyright 2026 The KCP Authors.
 
@@ -39,10 +37,6 @@ import (
 )
 
 func TestKcpTestSuite(t *testing.T) {
-	const (
-		externalHostname = "example.localhost"
-	)
-
 	testImage := os.Getenv("KCP_E2E_TEST_IMAGE")
 	if testImage == "" {
 		t.Skip("No $KCP_E2E_TEST_IMAGE defined.")
@@ -55,6 +49,9 @@ func TestKcpTestSuite(t *testing.T) {
 
 	// create namspace
 	namespace := utils.CreateSelfDestructingNamespace(t, ctx, client, "kcp")
+
+	// externalHostname must match whatever DeployFrontProxy chooses as the name for the FrontProxy
+	externalHostname := fmt.Sprintf("front-proxy-front-proxy.%s.svc.cluster.local", namespace.Name)
 
 	// deploy a root shard incl. etcd
 	rootShard := utils.DeployRootShard(ctx, t, client, namespace.Name, externalHostname)
@@ -84,7 +81,13 @@ func TestKcpTestSuite(t *testing.T) {
 		SecretRef: corev1.LocalObjectReference{
 			Name: rsConfigSecretName,
 		},
-		Groups: []string{"system:masters"},
+		// Groups: []string{"system:masters"},
+		Authorization: &operatorv1alpha1.KubeconfigAuthorization{
+			ClusterRoleBindings: operatorv1alpha1.KubeconfigClusterRoleBindings{
+				Cluster:      "root",
+				ClusterRoles: []string{"cluster-admin"},
+			},
+		},
 	}
 
 	t.Log("Creating kubeconfig for RootShard…")
