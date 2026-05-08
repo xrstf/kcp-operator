@@ -4,16 +4,10 @@
 
 FROM docker.io/golang:1.26.2
 
-ENV HTTEST_VERSION="0.3.4"
-RUN curl --fail -LO https://codeberg.org/xrstf/httest/releases/download/v${HTTEST_VERSION}/httest_${HTTEST_VERSION}_linux_$(dpkg --print-architecture).tar.gz && \
-    tar xzf httest_*.tar.gz && \
-    mv httest_*/httest /usr/local/bin
-
 WORKDIR /apps/kcp
 RUN git clone --depth 1 https://github.com/kcp-dev/kcp . && \
     go build -v ./test/...
 
-ENV NO_GORUN=1
-ENV GOMAXPROCS=1
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
-CMD [ "bash", "-c", "go test -v -parallel 1 ./test/e2e/... -args --kcp-kubeconfig $KUBECONFIG" ]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
