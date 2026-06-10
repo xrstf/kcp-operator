@@ -48,6 +48,7 @@ import (
 	"github.com/kcp-dev/kcp-operator/internal/reconciling/modifier"
 	"github.com/kcp-dev/kcp-operator/internal/resources/frontproxy"
 	"github.com/kcp-dev/kcp-operator/internal/resources/naming"
+	"github.com/kcp-dev/kcp-operator/internal/resources/naming/migration"
 	"github.com/kcp-dev/kcp-operator/internal/resources/rootshard"
 	operatorv1alpha1 "github.com/kcp-dev/kcp-operator/sdk/apis/operator/v1alpha1"
 )
@@ -266,6 +267,33 @@ func (r *RootShardReconciler) reconcile(ctx context.Context, rootShard *operator
 
 	if err := frontproxy.NewRootShardProxy(rootShard, names).Reconcile(ctx, r.Client, rootShard.Namespace); err != nil {
 		errs = append(errs, fmt.Errorf("failed to reconcile proxy: %w", err))
+	}
+
+	// Now that all v1 resources are reconciled, we try to migrate them to the version 2 naming scheme.
+	// This will fail as long as the certificates have not yet been issued. In that case return nil
+	// and rely on our existing watches to retrigger us.
+	version1 := naming.NewVersion1()
+	version2 := naming.NewVersion2()
+
+	if err := ctrlruntimeclient.IgnoreNotFound(migration.MirrorCertificate(
+		ctx,
+		r.Client,
+		rootShard.Namespace,
+		version1.RootShardCAName(rootShard, operatorv1alpha1.RootCA),
+		func(c *certmanagerv1.Certificate) (*certmanagerv1.Certificate, error) {
+			c.Name = version2.RootShardCAName(rootShard, operatorv1alpha1.RootCA)
+			// secret name and Cert name are identical in kcp-operator land
+			c.Spec.SecretName = c.Name
+			// same goes for the issuer, EXCEPT for the root CA, which uses a specially configured one
+			// c.Spec.IssuerRef.Name = c.Spec.SecretName
+			return c, nil
+		},
+		func(s *corev1.Secret, c *certmanagerv1.Certificate) (*corev1.Secret, error) {
+			s.Name = c.Spec.SecretName
+			return s, nil
+		},
+	)); err != nil {
+		errs = append(errs, fmt.Errorf("failed to migrate root CA: %w", err))
 	}
 
 	return conditions, kerrors.NewAggregate(errs)
