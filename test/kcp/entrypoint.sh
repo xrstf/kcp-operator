@@ -55,6 +55,9 @@ for shard in "${shards[@]}"; do
   fi
 done
 
+# precompile the tests so that part is not slowed down by GOMAXPROCS
+go build ./test/...
+
 export NO_GORUN=1
 export GOMAXPROCS=1
 
